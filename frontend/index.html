@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MSFS-Net · Aerial Image Dehazing</title>
+  <meta name="description" content="Multi Scale Deep Learning based Frequency Selective Dehazing Network for aerial imagery" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="bg-haze" aria-hidden="true"><span></span><span></span><span></span></div>
+
+  <!-- ============ HEADER ============ -->
+  <header class="hero">
+    <div class="status-pill" id="statusPill"><i></i><span id="statusText">Connecting to model…</span></div>
+    <p class="eyebrow">Aerial &amp; Satellite Image Restoration</p>
+    <h1>Multi Scale Deep Learning based <span class="grad">Frequency Selective</span> Dehazing Network</h1>
+    <p class="lead">Upload a hazy aerial image and watch MSFS-Net lift the veil — recovering contrast, colour and fine ground detail in seconds.</p>
+
+    <ol class="steps">
+      <li><b>1</b><span>Upload image</span></li>
+      <li><b>2</b><span>Pick haze type</span></li>
+      <li><b>3</b><span>Dehaze &amp; compare</span></li>
+    </ol>
+  </header>
+
+  <main>
+    <!-- ============ CONTROL PANEL ============ -->
+    <section class="panel" id="controls">
+      <div class="col-upload">
+        <h2><span class="num">1</span> Upload hazy image</h2>
+
+        <label class="dropzone" id="dropzone" for="fileInput" tabindex="0">
+          <input type="file" id="fileInput" accept="image/png,image/jpeg,image/bmp,image/tiff,image/webp" hidden />
+          <div class="dz-empty" id="dzEmpty">
+            <svg viewBox="0 0 64 64" width="56" height="56" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 44a11 11 0 0 1-1-21.9A15 15 0 0 1 46 20a12 12 0 0 1 2 24" />
+              <path d="M32 52V30M24 37l8-8 8 8" />
+            </svg>
+            <strong>Drag &amp; drop your hazy image here</strong>
+            <span>or <u>browse files</u> · PNG, JPG, BMP, TIFF · up to 25 MB</span>
+          </div>
+          <div class="dz-preview" id="dzPreview" hidden>
+            <img id="previewImg" alt="Selected hazy image preview" />
+            <div class="dz-meta">
+              <span id="fileName">—</span>
+              <button type="button" class="link-btn" id="clearBtn">✕ Remove</button>
+            </div>
+          </div>
+        </label>
+
+        <details class="ref-box" id="refBox">
+          <summary>Add ground-truth clear image <em>(optional · for true PSNR / SSIM / error map)</em></summary>
+          <div class="ref-inner">
+            <label class="btn ghost small" for="refInput">Choose reference image</label>
+            <input type="file" id="refInput" accept="image/*" hidden />
+            <span id="refName" class="muted">No reference selected</span>
+            <button type="button" class="link-btn" id="refClear" hidden>✕</button>
+          </div>
+          <p class="hint">PSNR &amp; SSIM need a clean reference of the same scene. Without one, they are computed against the hazy input and only show how much the image changed.</p>
+        </details>
+      </div>
+
+      <div class="col-options">
+        <h2><span class="num">2</span> Choose haze type</h2>
+        <div class="chips" id="hazeChips" role="radiogroup" aria-label="Haze type">
+          <button type="button" class="chip active" data-type="auto"     role="radio" aria-checked="true">
+            <span class="ico">✨</span><b>Auto-detect</b><small>Let the app estimate</small></button>
+          <button type="button" class="chip" data-type="thin"     role="radio" aria-checked="false">
+            <span class="ico">🌤️</span><b>Thin haze</b><small>Light, see-through</small></button>
+          <button type="button" class="chip" data-type="moderate" role="radio" aria-checked="false">
+            <span class="ico">🌥️</span><b>Moderate haze</b><small>Washed-out detail</small></button>
+          <button type="button" class="chip" data-type="thick"    role="radio" aria-checked="false">
+            <span class="ico">🌫️</span><b>Thick haze</b><small>Dense, heavy cover</small></button>
+        </div>
+
+        <button class="btn primary big" id="dehazeBtn" disabled>
+          <span class="btn-label">Dehaze Image</span>
+          <span class="spinner" hidden></span>
+        </button>
+        <p class="error" id="errorBox" role="alert" hidden></p>
+      </div>
+    </section>
+
+    <!-- ============ RESULTS ============ -->
+    <section class="results" id="results" hidden>
+      <div class="results-head">
+        <h2>Result</h2>
+        <div class="tags" id="resultTags"></div>
+      </div>
+
+      <div class="compare">
+        <figure class="img-card">
+          <figcaption><span class="badge hazy">Hazy Input</span></figcaption>
+          <div class="img-wrap"><img id="outHazy" alt="Hazy input" /></div>
+        </figure>
+
+        <figure class="img-card">
+          <figcaption>
+            <span class="badge clear">Dehazed Output</span>
+            <a class="btn ghost small" id="downloadBtn" download="dehazed.png">⬇ Download</a>
+          </figcaption>
+          <div class="img-wrap"><img id="outClear" alt="Dehazed output" /></div>
+        </figure>
+
+        <figure class="img-card">
+          <figcaption><span class="badge diff" id="diffBadge">Error Map</span></figcaption>
+          <div class="img-wrap"><img id="outDiff" alt="Error map: absolute difference" /></div>
+          <div class="legend">
+            <span>0</span><div class="legend-bar"></div><span id="legendMax">0.3</span>
+          </div>
+          <div class="diff-actions">
+            <a class="btn ghost small" id="dlPlot" download="error_map_plot.png">⬇ Plot + colorbar</a>
+            <a class="btn ghost small" id="dlRaw" download="error_map_raw.png">⬇ Raw map</a>
+          </div>
+        </figure>
+      </div>
+
+      <!-- METRICS (bottom) -->
+      <div class="metrics" id="metrics">
+        <div class="metric">
+          <span class="m-label">PSNR</span>
+          <span class="m-value"><span id="psnrVal">0.00</span><small>dB</small></span>
+          <div class="bar"><i id="psnrBar"></i></div>
+          <span class="m-note">Higher is better</span>
+        </div>
+        <div class="metric">
+          <span class="m-label">SSIM</span>
+          <span class="m-value"><span id="ssimVal">0.0000</span></span>
+          <div class="bar"><i id="ssimBar"></i></div>
+          <span class="m-note">Closer to 1 is better</span>
+        </div>
+        <div class="metric small-metric">
+          <span class="m-label">Mean abs. error</span>
+          <span class="m-value"><span id="maeVal">–</span></span>
+          <span class="m-note">avg of the error map</span>
+        </div>
+        <div class="metric small-metric">
+          <span class="m-label">Inference time</span>
+          <span class="m-value"><span id="timeVal">–</span><small>s</small></span>
+          <span class="m-note" id="deviceNote">–</span>
+        </div>
+        <div class="metric small-metric">
+          <span class="m-label">Estimated haze density</span>
+          <span class="m-value"><span id="densityVal">–</span><small>%</small></span>
+          <span class="m-note" id="densityNote">dark-channel heuristic</span>
+        </div>
+      </div>
+      <p class="metric-banner" id="metricBanner"></p>
+    </section>
+  </main>
+
+  <footer>
+    MSFS-Net · multi-scale attention · frequency-band refinement · content-gated blocks ·
+    trained on SateHaze1K
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>

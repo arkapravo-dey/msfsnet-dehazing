@@ -1,0 +1,11 @@
+# Install PyTorch first (pick the right command for your machine at https://pytorch.org/get-started/locally/)
+# CPU-only example:  pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch>=2.0
+
+fastapi>=0.100
+uvicorn>=0.23
+python-multipart>=0.0.6
+numpy>=1.23
+pillow>=9.5
+opencv-python-headless>=4.8
+matplotlib>=3.7
